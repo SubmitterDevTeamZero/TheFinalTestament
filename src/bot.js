@@ -22,6 +22,52 @@ const genQuery = (chapterNumLookup, verseNumLookup) => {
   throw new Error('BAD SURA AND/OR VERSE: Need to provide a number');
 };
 
+const parseCMD = (type, cmd) => ({
+  type,
+  cmd,
+});
+
+const parseVerseQuery = (type, message) => {
+  const format = { type };
+  let val = '';
+
+  for (let i = 0; i < message.length; i += 1) {
+    const char = message[i];
+    if (char === ':') {
+      format.chapter = parseInt(val, 10);
+      val = '';
+      continue;
+    } else if (char === '-') {
+      format.startVerse = parseInt(val, 10);
+      val = '';
+      continue;
+    }
+    val += char;
+  }
+
+  if (val !== '') {
+    if ('startVerse' in format) {
+      format.endVerse = parseInt(val, 10);
+    } else {
+      format.startVerse = parseInt(val, 10);
+    }
+  }
+
+  return format;
+}
+
+const parseLookup = (query) => {
+  if (typeof query !== 'string') {
+    throw new Error('BAD QUERY: Please submit a string');
+  }
+  const type = query[0];
+  if (type === '!') {
+    return parseCMD(type, query.slice(1));
+  } else if (type === '$') {
+    return parseVerseQuery(type, query.slice(1));
+  }
+};
+
 const findVerse = (chapterNumLookup, verseNumLookup, callback) => {
   const verseQuery = genQuery(chapterNumLookup, verseNumLookup);
 
