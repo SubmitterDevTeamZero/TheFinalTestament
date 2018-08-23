@@ -5,7 +5,16 @@
   "main": "index.js",
   "scripts": {
     "test": "nyc mocha",
-    "start": "node src/bot.js"
+    "start": "node src/bot.js",
+    "report": "nyc report --reporter=html"
+  },
+  "nyc": {
+    "watermarks": {
+      "lines": [80, 95],
+      "functions": [80, 95],
+      "branches": [80, 95],
+      "statements": [80, 95]
+    }
   },
   "author": "",
   "license": "MIT",
