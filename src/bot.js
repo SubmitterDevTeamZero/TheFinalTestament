@@ -13,8 +13,17 @@ const db = new sqlite3.Database(`${__dirname}/../files/Quran.sqlite`, sqlite3.OP
   }
 });
 
+const genQuery = (chapterNumLookup, verseNumLookup) => {
+  if (chapterNumLookup && verseNumLookup) {
+    return (
+      `SELECT v.ZSUBTITLE, v.ZENGLISH_VERSION, v.ZFOOTNOTE FROM ZVERSE v INNER JOIN ZSURA s ON s.Z_PK = v.ZWHICHSURA WHERE v.ZVERSE_NO IS ${verseNumLookup} AND s.ZSURA_NO IS ${chapterNumLookup};`
+    )
+  }
+  throw new Error('BAD SURA AND/OR VERSE: Need to provide a number');
+};
+
 const findVerse = (chapterNumLookup, verseNumLookup, callback) => {
-  const verseQuery = `SELECT v.ZSUBTITLE, v.ZENGLISH_VERSION, v.ZFOOTNOTE FROM ZVERSE v INNER JOIN ZSURA s ON s.Z_PK = v.ZWHICHSURA WHERE v.ZVERSE_NO IS ${verseNumLookup} AND s.ZSURA_NO IS ${chapterNumLookup};`
+  const verseQuery = genQuery(chapterNumLookup, verseNumLookup);
 
   return db.get(verseQuery, [], (err, rows) => {
     if (err) {
@@ -24,7 +33,7 @@ const findVerse = (chapterNumLookup, verseNumLookup, callback) => {
       callback(rows);
     }
   });
-}
+};
 
 // close the database connection
 const closeDb = () => {
@@ -37,7 +46,6 @@ const closeDb = () => {
 }
 
 const cleanVerse = (chapterNum, verseNum, verseInfo) => {
-  console.log('this is verseinfo', verseInfo)
   const { ZSUBTITLE, ZENGLISH_VERSION, ZFOOTNOTE } = verseInfo;
   const result = [];
 
@@ -117,3 +125,8 @@ bot.on('message', function (user, userID, channelID, message, evt) {
   }
 
 });
+
+module.exports = {
+  genQuery,
+  cleanVerse,
+};
