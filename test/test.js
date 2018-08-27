@@ -20,7 +20,8 @@ describe('### THE FINAL TESTAMENT ###', () => {
     });
 
     it('should return an error if a sura or a verse isn\'t provided', () => {
-      expect(genQuery).to.throw(Error).with.property('message', 'BAD SURA AND/OR VERSE: Need to provide a number');
+      const error = genQuery();
+      expect(error.message).to.equal('BAD SURA AND/OR VERSE: Need to provide a number');
     });
   });
 
@@ -133,7 +134,8 @@ describe('### THE FINAL TESTAMENT ###', () => {
     });
     
     it('should return an error if a string isn\'t passed in', () => {
-      expect(parseLookup).to.throw(Error).with.property('message', 'BAD QUERY: Please submit a string');
+      const error = parseLookup();
+      expect(error.message).to.equal('BAD QUERY: Please submit a string');
     })
     
     it('should return an object', () => {

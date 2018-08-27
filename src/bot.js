@@ -3,7 +3,8 @@ const logger = require('winston');
 const sqlite3 = require('sqlite3').verbose();
 // const Promise = require('bluebird');
 
-const auth = require('./../auth.json');
+// const auth = require('./../auth.json');
+const auth = { token: 'token' };
 
 const db = new sqlite3.Database(`${__dirname}/../files/Quran.sqlite`, sqlite3.OPEN_READONLY, (err) => {
   if (err) {
@@ -19,7 +20,7 @@ const genQuery = (chapterNumLookup, verseNumLookup) => {
       `SELECT v.ZSUBTITLE, v.ZENGLISH_VERSION, v.ZFOOTNOTE FROM ZVERSE v INNER JOIN ZSURA s ON s.Z_PK = v.ZWHICHSURA WHERE v.ZVERSE_NO IS ${verseNumLookup} AND s.ZSURA_NO IS ${chapterNumLookup};`
     )
   }
-  throw new Error('BAD SURA AND/OR VERSE: Need to provide a number');
+  return new Error('BAD SURA AND/OR VERSE: Need to provide a number');
 };
 
 const parseCMD = (type, cmd) => ({
@@ -58,7 +59,7 @@ const parseVerseQuery = (type, message) => {
 
 const parseLookup = (query) => {
   if (typeof query !== 'string') {
-    throw new Error('BAD QUERY: Please submit a string');
+    return new Error('BAD QUERY: Please submit a string');
   }
   const type = query[0];
   if (type === '!') {
