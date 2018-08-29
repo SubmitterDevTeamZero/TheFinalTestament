@@ -3,8 +3,7 @@ const logger = require('winston');
 const sqlite3 = require('sqlite3').verbose();
 // const Promise = require('bluebird');
 
-// const auth = require('./../auth.json');
-const auth = { token: 'token' };
+const auth = require('./../auth.json');
 
 const db = new sqlite3.Database(`${__dirname}/../files/Quran.sqlite`, sqlite3.OPEN_READONLY, (err) => {
   if (err) {
