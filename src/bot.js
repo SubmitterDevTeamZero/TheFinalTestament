@@ -34,11 +34,23 @@ const parseVerseQuery = (type, message) => {
   for (let i = 0; i < message.length; i += 1) {
     const char = message[i];
     if (char === ':') {
-      format.chapter = parseInt(val, 10);
+      const chapter = parseInt(val, 10);
+
+      if (isNaN(chapter)) {
+        return new Error(`BAD SURA: "${val}"`);
+      }
+
+      format.chapter = chapter;
       val = '';
       continue;
     } else if (char === '-') {
-      format.startVerse = parseInt(val, 10);
+      const startVerse = parseInt(val, 10);
+
+      if (isNaN(startVerse)) {
+        return new Error(`BAD START VERSE: "${val}"`);
+      }
+
+      format.startVerse = startVerse;
       val = '';
       continue;
     }
@@ -47,9 +59,21 @@ const parseVerseQuery = (type, message) => {
 
   if (val !== '') {
     if ('startVerse' in format) {
+      const endVerse = parseInt(val, 10);
+
+      if (isNaN(endVerse)) {
+        return new Error(`BAD END VERSE: "${val}"`);
+      }
+
       format.endVerse = parseInt(val, 10);
     } else {
-      format.startVerse = parseInt(val, 10);
+      const startVerse = parseInt(val, 10);
+
+      if (isNaN(startVerse)) {
+        return new Error(`BAD START VERSE: "${val}"`);
+      }
+
+      format.startVerse = startVerse;
     }
   }
 
@@ -89,7 +113,7 @@ const closeDb = () => {
     }
     console.log('Closing the database connection.');
   });
-}
+};
 
 const cleanVerse = (chapterNum, verseNum, verseInfo) => {
   const { ZSUBTITLE, ZENGLISH_VERSION, ZFOOTNOTE } = verseInfo;
