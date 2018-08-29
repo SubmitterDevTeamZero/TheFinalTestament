@@ -13,8 +13,63 @@ const db = new sqlite3.Database(`${__dirname}/../files/Quran.sqlite`, sqlite3.OP
   }
 });
 
+const genQuery = (chapterNumLookup, verseNumLookup) => {
+  if (chapterNumLookup && verseNumLookup) {
+    return (
+      `SELECT v.ZSUBTITLE, v.ZENGLISH_VERSION, v.ZFOOTNOTE FROM ZVERSE v INNER JOIN ZSURA s ON s.Z_PK = v.ZWHICHSURA WHERE v.ZVERSE_NO IS ${verseNumLookup} AND s.ZSURA_NO IS ${chapterNumLookup};`
+    )
+  }
+  return new Error('BAD SURA AND/OR VERSE: Need to provide a number');
+};
+
+const parseCMD = (type, cmd) => ({
+  type,
+  cmd,
+});
+
+const parseVerseQuery = (type, message) => {
+  const format = { type };
+  let val = '';
+
+  for (let i = 0; i < message.length; i += 1) {
+    const char = message[i];
+    if (char === ':') {
+      format.chapter = parseInt(val, 10);
+      val = '';
+      continue;
+    } else if (char === '-') {
+      format.startVerse = parseInt(val, 10);
+      val = '';
+      continue;
+    }
+    val += char;
+  }
+
+  if (val !== '') {
+    if ('startVerse' in format) {
+      format.endVerse = parseInt(val, 10);
+    } else {
+      format.startVerse = parseInt(val, 10);
+    }
+  }
+
+  return format;
+}
+
+const parseLookup = (query) => {
+  if (typeof query !== 'string') {
+    return new Error('BAD QUERY: Please submit a string');
+  }
+  const type = query[0];
+  if (type === '!') {
+    return parseCMD(type, query.slice(1));
+  } else if (type === '$') {
+    return parseVerseQuery(type, query.slice(1));
+  }
+};
+
 const findVerse = (chapterNumLookup, verseNumLookup, callback) => {
-  const verseQuery = `SELECT v.ZSUBTITLE, v.ZENGLISH_VERSION, v.ZFOOTNOTE FROM ZVERSE v INNER JOIN ZSURA s ON s.Z_PK = v.ZWHICHSURA WHERE v.ZVERSE_NO IS ${verseNumLookup} AND s.ZSURA_NO IS ${chapterNumLookup};`
+  const verseQuery = genQuery(chapterNumLookup, verseNumLookup);
 
   return db.get(verseQuery, [], (err, rows) => {
     if (err) {
@@ -24,7 +79,7 @@ const findVerse = (chapterNumLookup, verseNumLookup, callback) => {
       callback(rows);
     }
   });
-}
+};
 
 // close the database connection
 const closeDb = () => {
@@ -37,7 +92,6 @@ const closeDb = () => {
 }
 
 const cleanVerse = (chapterNum, verseNum, verseInfo) => {
-  console.log('this is verseinfo', verseInfo)
   const { ZSUBTITLE, ZENGLISH_VERSION, ZFOOTNOTE } = verseInfo;
   const result = [];
 
@@ -117,3 +171,11 @@ bot.on('message', function (user, userID, channelID, message, evt) {
   }
 
 });
+
+module.exports = {
+  genQuery,
+  cleanVerse,
+  parseCMD,
+  parseVerseQuery,
+  parseLookup
+};

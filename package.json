@@ -4,8 +4,17 @@
   "description": "a bot",
   "main": "index.js",
   "scripts": {
-    "test": "test",
-    "start": "node src/bot.js"
+    "test": "nyc mocha",
+    "start": "node src/bot.js",
+    "report": "nyc report --reporter=html"
+  },
+  "nyc": {
+    "watermarks": {
+      "lines": [80, 95],
+      "functions": [80, 95],
+      "branches": [80, 95],
+      "statements": [80, 95]
+    }
   },
   "author": "",
   "license": "MIT",
@@ -15,5 +24,10 @@
     "sqlite3": "^4.0.2",
     "winston": "^3.0.0",
     "winston-logzio": "^1.0.6"
+  },
+  "devDependencies": {
+    "chai": "^4.1.2",
+    "mocha": "^5.2.0",
+    "nyc": "^12.0.2"
   }
 }
