@@ -101,6 +101,9 @@ describe('### THE FINAL TESTAMENT ###', () => {
     const type = '$';
     const single = '63:6';
     const multiple = '63:1-6';
+    const badSura = 'NUM:6';
+    const badStartVerse = '63:NUM';
+    const badEndVerse = '63:1-NUM';
 
     it('should be a function', () => {
       expect(parseVerseQuery).to.be.a('function');
@@ -124,6 +127,21 @@ describe('### THE FINAL TESTAMENT ###', () => {
       expect(actual).to.have.property('chapter', 63);
       expect(actual).to.have.property('startVerse', 1);
       expect(actual).to.have.property('endVerse', 6);
+    });
+
+    it('should return an error is a bad sura is passed', () => {
+      const error = parseVerseQuery(type, badSura);
+      expect(error.message).to.equal('BAD SURA: "NUM"');
+    });
+
+    it('should return an error is a bad start verse is passed', () => {
+      const error = parseVerseQuery(type, badStartVerse);
+      expect(error.message).to.equal('BAD START VERSE: "NUM"');
+    });
+
+    it('should return an error is a bad sura is passed', () => {
+      const error = parseVerseQuery(type, badEndVerse);
+      expect(error.message).to.equal('BAD END VERSE: "NUM"');
     });
   });
 
