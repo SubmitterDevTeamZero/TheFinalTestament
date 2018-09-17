@@ -4,8 +4,6 @@ const Discord = require('discord.io'),
       dotenv = require('dotenv');
 // const Promise = require('bluebird');
 
-const auth = require('./../auth.json');
-
 const db = new sqlite3.Database(`${__dirname}/../files/Quran.sqlite`, sqlite3.OPEN_READONLY, (err) => {
   if (err) {
     console.error(err.message);
@@ -16,10 +14,13 @@ const db = new sqlite3.Database(`${__dirname}/../files/Quran.sqlite`, sqlite3.OP
 
 dotenv.config();
 var NODE_ENV = process.env.NODE_ENV || 'development';
+var AUTH_TOKEN = process.env.AUTH_TOKEN || 'dev_token';
 
 if (NODE_ENV == 'development') {
   var stdin = process.openStdin();
   stdin.addListener("data", function(d) {
+      if (d.toString().trim() == 'quit')
+        process.exit(-1);
       // note:  d is an object, and when converted to a string it will
       // end with a linefeed.  so we (rather crudely) account for that  
       // with toString() and then trim() 
@@ -149,7 +150,7 @@ logger.level = 'debug';
 
 // Initialize Discord Bot
 const bot = new Discord.Client({
-  token: auth.token,
+  token: AUTH_TOKEN,
   autorun: true
 });
 
@@ -162,7 +163,6 @@ bot.on('ready', function (evt) {
 bot.on('message', function (user, userID, channelID, message, evt) {
   handleMessage(userID, channelID, message);
 });
-
 
 const handleMessage = (userID, channelID, message) => {
   if (message[0] === '$') {
