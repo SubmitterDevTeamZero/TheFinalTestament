@@ -1,6 +1,7 @@
-const Discord = require('discord.io');
-const logger = require('winston');
-const sqlite3 = require('sqlite3').verbose();
+const Discord = require('discord.io'),
+      logger = require('winston'),
+      sqlite3 = require('sqlite3').verbose(),
+      dotenv = require('dotenv');
 // const Promise = require('bluebird');
 
 const auth = require('./../auth.json');
@@ -12,6 +13,19 @@ const db = new sqlite3.Database(`${__dirname}/../files/Quran.sqlite`, sqlite3.OP
     console.log('Connected to the Quran database.');
   }
 });
+
+dotenv.config();
+var NODE_ENV = process.env.NODE_ENV || 'development';
+
+if (NODE_ENV == 'development') {
+  var stdin = process.openStdin();
+  stdin.addListener("data", function(d) {
+      // note:  d is an object, and when converted to a string it will
+      // end with a linefeed.  so we (rather crudely) account for that  
+      // with toString() and then trim() 
+      handleMessage('MOCK_USER_ID', 'MOCK_CHANNEL_ID', d.toString().trim());
+    });
+}
 
 const genQuery = (chapterNumLookup, verseNumLookup) => {
   if (chapterNumLookup && verseNumLookup) {
@@ -146,6 +160,11 @@ bot.on('ready', function (evt) {
 });
 
 bot.on('message', function (user, userID, channelID, message, evt) {
+  handleMessage(userID, channelID, message);
+});
+
+
+const handleMessage = (userID, channelID, message) => {
   if (message[0] === '$') {
     const args = message.substring(1).split(":");
     const chapterNum = parseInt(args[0], 10);
@@ -157,16 +176,9 @@ bot.on('message', function (user, userID, channelID, message, evt) {
         // console.log(chapterNum, verseNum, verseInfo);
         if (verseInfo) {
           const message = cleanVerse(chapterNum, verseNum, verseInfo);
-  
-          bot.sendMessage({
-            to: channelID,
-            message
-          });
+          sendMessage(channelID, message);
         } else {
-          bot.sendMessage({
-            to: userID,
-            message: `Invalid verse - [${chapterNum}:${verseNum}] does not exist`
-          });
+          sendMessage(userID, `Invalid verse - [${chapterNum}:${verseNum}] does not exist`);
         }
   
       });
@@ -180,21 +192,27 @@ bot.on('message', function (user, userID, channelID, message, evt) {
     switch (cmd) {
       // !ping
       case 'ping':
-        bot.sendMessage({
-          to: channelID,
-          message: 'Pong!'
-        });
+        sendMessage(channelID, 'Pong!');
         break;
       case 'makan':
-        bot.sendMessage({
-          to: channelID,
-          message: 'Hi Makan, thanks for that swell SQL query! Much love'
-        });
+        sendMessage(channelID, 'Hi Makan, thanks for that swell SQL query! Much love');
         break;
     }
   }
+}
 
-});
+const sendMessage = (recipient, message) => {
+  if (NODE_ENV == 'development') {
+    console.log('Recipient: ' + recipient);
+    console.log('Message: ' + message);
+    return;
+  }
+
+  bot.sendMessage({
+    to: recipient,
+    message: message
+  });
+};
 
 module.exports = {
   genQuery,
