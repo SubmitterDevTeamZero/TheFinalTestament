@@ -1,25 +1,46 @@
 const Discord = require('discord.io'),
-      logger = require('winston'),
+      winston = require('winston'),
       sqlite3 = require('sqlite3').verbose(),
       dotenv = require('dotenv');
-// const Promise = require('bluebird');
 
-const db = new sqlite3.Database(`${__dirname}/../files/Quran.sqlite`, sqlite3.OPEN_READONLY, (err) => {
-  if (err) {
-    console.error(err.message);
-  } else {
-    console.log('Connected to the Quran database.');
-  }
-});
+const MAX_LENGTH = 1400;
 
 dotenv.config();
 var NODE_ENV = process.env.NODE_ENV || 'development';
 var AUTH_TOKEN = process.env.AUTH_TOKEN || 'dev_token';
 
-if (NODE_ENV == 'development') {
+// Configure logger settings
+const transportConsole = new (winston.transports.Console)({
+  timestamp: true,
+  colorize: true,
+});
+const transportFile = new winston.transports.File({filename: 'bot.log'});
+var logger;
+if (NODE_ENV === 'development') {
+    logger = winston.createLogger({
+        format: winston.format.json(),
+        transports: [transportConsole, transportFile]
+      });
+} else {
+    logger = winston.createLogger({
+        format: winston.format.json(),
+        transports: [transportFile]
+      });
+}
+logger.level = process.env.LOG_LEVEL || 'silly';
+
+const db = new sqlite3.Database(`${__dirname}/../files/Quran.sqlite`, sqlite3.OPEN_READONLY, (err) => {
+  if (err) {
+    logger.error(err.message);
+  } else {
+    logger.info('Connected to the Quran database.');
+  }
+});
+
+if (NODE_ENV === 'development') {
   var stdin = process.openStdin();
   stdin.addListener("data", function(d) {
-      if (d.toString().trim() == 'quit')
+      if (d.toString().trim() === 'quit')
         process.exit(-1);
       // note:  d is an object, and when converted to a string it will
       // end with a linefeed.  so we (rather crudely) account for that  
@@ -28,125 +49,145 @@ if (NODE_ENV == 'development') {
     });
 }
 
-const genQuery = (chapterNumLookup, verseNumLookup) => {
-  if (chapterNumLookup && verseNumLookup) {
+const genQuery = (suraNumLookup, verseNumLookup) => {
+  if (!isNaN(suraNumLookup) && !isNaN(verseNumLookup)) {
     return (
-      `SELECT v.ZSUBTITLE, v.ZENGLISH_VERSION, v.ZFOOTNOTE FROM ZVERSE v INNER JOIN ZSURA s ON s.Z_PK = v.ZWHICHSURA WHERE v.ZVERSE_NO IS ${verseNumLookup} AND s.ZSURA_NO IS ${chapterNumLookup};`
+      `SELECT s.ZSURA_EN, v.ZSUBTITLE, v.ZENGLISH_VERSION, v.ZFOOTNOTE FROM ZVERSE v INNER JOIN ZSURA s ON s.Z_PK = v.ZWHICHSURA WHERE v.ZVERSE_NO IS ${verseNumLookup} AND s.ZSURA_NO IS ${suraNumLookup};`
     )
   }
-  return new Error('BAD SURA AND/OR VERSE: Need to provide a number');
+  return new Error('INVALID SURA AND/OR VERSE: Need to provide a number');
 };
 
-const parseCMD = (type, cmd) => ({
-  type,
-  cmd,
-});
-
-const parseVerseQuery = (type, message) => {
-  const format = { type };
-  let val = '';
-
-  for (let i = 0; i < message.length; i += 1) {
-    const char = message[i];
-    if (char === ':') {
-      const chapter = parseInt(val, 10);
-
-      if (isNaN(chapter)) {
-        return new Error(`BAD SURA: "${val}"`);
-      }
-
-      format.chapter = chapter;
-      val = '';
-      continue;
-    } else if (char === '-') {
-      const startVerse = parseInt(val, 10);
-
-      if (isNaN(startVerse)) {
-        return new Error(`BAD START VERSE: "${val}"`);
-      }
-
-      format.startVerse = startVerse;
-      val = '';
-      continue;
-    }
-    val += char;
+const genRangeQuery = (suraNumLookup, firstVerseNum, lastVerseNum) => {
+  if (!isNaN(suraNumLookup) && !isNaN(firstVerseNum) && !isNaN(lastVerseNum)) {
+    return (
+      `SELECT s.ZSURA_EN, v.ZSUBTITLE, v.ZENGLISH_VERSION, v.ZFOOTNOTE FROM ZVERSE v INNER JOIN ZSURA s ON s.Z_PK = v.ZWHICHSURA WHERE v.ZVERSE_NO BETWEEN ${firstVerseNum} AND ${lastVerseNum} AND s.ZSURA_NO IS ${suraNumLookup} ORDER BY v.ZVERSE_NO;`
+    )
   }
-
-  if (val !== '') {
-    if ('startVerse' in format) {
-      const endVerse = parseInt(val, 10);
-
-      if (isNaN(endVerse)) {
-        return new Error(`BAD END VERSE: "${val}"`);
-      }
-
-      format.endVerse = parseInt(val, 10);
-    } else {
-      const startVerse = parseInt(val, 10);
-
-      if (isNaN(startVerse)) {
-        return new Error(`BAD START VERSE: "${val}"`);
-      }
-
-      format.startVerse = startVerse;
-    }
-  }
-
-  return format;
-}
-
-const parseLookup = (query) => {
-  if (typeof query !== 'string') {
-    return new Error('BAD QUERY: Please submit a string');
-  }
-  const type = query[0];
-  if (type === '!') {
-    return parseCMD(type, query.slice(1));
-  } else if (type === '$') {
-    return parseVerseQuery(type, query.slice(1));
-  }
+  return new Error('INVALID SURA AND/OR VERSES: Need to provide a number');
 };
 
-const findVerse = (chapterNumLookup, verseNumLookup, callback) => {
-  const verseQuery = genQuery(chapterNumLookup, verseNumLookup);
+const findVerse = (suraNumLookup, verseNumLookup, callback) => {
+  const verseQuery = genQuery(suraNumLookup, verseNumLookup);
 
   return db.get(verseQuery, [], (err, rows) => {
     if (err) {
       throw err;
     } else {
-      // console.log('these are the verses', rows);
+      logger.debug('these are the verses', rows);
       callback(rows);
     }
   });
 };
 
-// close the database connection
-const closeDb = () => {
-  db.close((err) => {
+// Looks up a range of verses from firstVerseNum to lastVerseNum
+// in the given sura
+const findVerses = (suraNumLookup, firstVerseNum, lastVerseNum, callback) => {
+  const numVerses = lastVerseNum - firstVerseNum + 1;
+  if (isNaN(numVerses) || numVerses < 1)
+    throw new Error('findVerses: INVALID VERSE RANGE')
+
+  const verseQuery = genRangeQuery(suraNumLookup, firstVerseNum, lastVerseNum);
+
+  return db.all(verseQuery, [], (err, rows) => {
     if (err) {
-      return console.error(err.message);
+      throw err;
+    } else {
+      logger.debug('these are the verses (range)', rows);
+      callback(rows);
     }
-    console.log('Closing the database connection.');
   });
 };
 
-const cleanVerse = (chapterNum, verseNum, verseInfo) => {
-  const { ZSUBTITLE, ZENGLISH_VERSION, ZFOOTNOTE } = verseInfo;
-  const result = [];
+const cleanVerse = (suraNum, verseNum, verseInfo) => {
+  const { ZSURA_EN, ZSUBTITLE, ZENGLISH_VERSION, ZFOOTNOTE } = verseInfo;
+  if (!areInputsValid(suraNum, verseNum, verseNum))
+    throw new Error('cleanVerses: INVALID VERSE RANGE')
 
-  if (ZSUBTITLE) result.push(ZSUBTITLE);
-  result.push(`[${chapterNum}:${verseNum}] ${ZENGLISH_VERSION}`);
-  if (ZFOOTNOTE) result.push(ZFOOTNOTE);
+  const result = [];
+  if (verseNum === 0) {
+    result.push(`Sura ${suraNum}: ${ZSURA_EN}`);
+    result.push(ZENGLISH_VERSION);
+  } else if (verseNum === 1) {
+    result.push(`Sura ${suraNum}: ${ZSURA_EN}`);
+    if (suraNum !== 1 && suraNum !== 9) {
+      result.push('In the name of GOD, Most Gracious, Most Merciful');
+    }
+    result.push(`[${suraNum}:${verseNum}] ${ZENGLISH_VERSION}`);
+    if (ZFOOTNOTE) result.push(ZFOOTNOTE);
+  } else {
+    if (ZSUBTITLE) result.push(ZSUBTITLE);
+    result.push(`[${suraNum}:${verseNum}] ${ZENGLISH_VERSION}`);
+    if (ZFOOTNOTE) result.push(ZFOOTNOTE);
+  }
 
   return result.join('\n');
 }
 
-// Configure logger settings
-logger.remove(logger.transports.Console);
-logger.add(new logger.transports.Console, {
-  colorize: true
-});
-logger.level = 'debug';
+// Get string containing range of verses
+const cleanVerses = (suraNum, firstVerseNum, lastVerseNum, rows) => {
+  const numVerses = lastVerseNum - firstVerseNum + 1;
+  if (!areInputsValid(suraNum, firstVerseNum, lastVerseNum) || isNaN(numVerses) || numVerses < 1)
+    throw new Error('cleanVerses: INVALID VERSE RANGE')
+
+  const result = [];
+  var num = 0;
+  rows.forEach(function (row) {
+    const currentVerse = firstVerseNum + num;
+    const { ZSURA_EN, ZSUBTITLE, ZENGLISH_VERSION, ZFOOTNOTE } = row;
+
+    if (suraNum === 1) {
+      if (currentVerse === 0) {
+        throw new Error('cleanVerses: INVALID VERSE RANGE')
+      } else if (currentVerse === 1) {
+        result.push(`Sura ${suraNum}: ${ZSURA_EN}`);
+      }
+      if (ZSUBTITLE) result.push(ZSUBTITLE);
+      result.push(`[${suraNum}:${currentVerse}] ${ZENGLISH_VERSION}`);
+      if (ZFOOTNOTE) result.push(ZFOOTNOTE);
+    } else { // Sura 2-114
+      if (currentVerse === 0) {
+        result.push(`Sura ${suraNum}: ${ZSURA_EN}`);
+        result.push(ZENGLISH_VERSION);
+        if (ZFOOTNOTE) result.push(ZFOOTNOTE);
+      } else if (currentVerse === 1) {
+        if (firstVerseNum !== 0) { // this prevents redundant title text
+          result.push(`Sura ${suraNum}: ${ZSURA_EN}`);
+          if (suraNum === 9) // No basmalah!
+            result.push('No Basmalah*');
+          else
+            result.push('In the name of GOD, Most Gracious, Most Merciful');
+        }
+        result.push(`[${suraNum}:${currentVerse}] ${ZENGLISH_VERSION}`);
+        if (ZFOOTNOTE) result.push(ZFOOTNOTE);
+      } else {
+        if (ZSUBTITLE) result.push(ZSUBTITLE);
+        result.push(`[${suraNum}:${currentVerse}] ${ZENGLISH_VERSION}`);
+        if (ZFOOTNOTE) result.push(ZFOOTNOTE);
+      }
+    }
+
+    num++;
+  });
+
+  return result.join('\n');
+}
+
+const areInputsValid = (suraNum, firstVerseNum, lastVerseNum) => {
+  if ( (isNaN(suraNum) || isNaN(firstVerseNum) || isNaN(lastVerseNum))
+      || (firstVerseNum > lastVerseNum)
+      || (suraNum < 0)
+      || (firstVerseNum < 0)
+      || (lastVerseNum < 0)
+      || (suraNum > 114)
+      || (firstVerseNum > 286)
+      || (lastVerseNum > 286)
+      || (suraNum == 1 && firstVerseNum == 0)
+      || (suraNum == 9 && firstVerseNum == 0) )
+    return false;
+
+  return true;
+}
 
 // Initialize Discord Bot
 const bot = new Discord.Client({
@@ -166,43 +207,66 @@ bot.on('message', function (user, userID, channelID, message, evt) {
 
 const handleMessage = (userID, channelID, message) => {
   if (message[0] === '$') {
-    const args = message.substring(1).split(":");
-    const chapterNum = parseInt(args[0], 10);
-    const verseNum = parseInt(args[1], 10);
-    // console.log(chapterNum, verseNum);
-  
-    if (!isNaN(chapterNum) && !isNaN(verseNum)) {
-      findVerse(chapterNum, verseNum, (verseInfo) => {
-        // console.log(chapterNum, verseNum, verseInfo);
-        if (verseInfo) {
-          const message = cleanVerse(chapterNum, verseNum, verseInfo);
-          sendMessage(channelID, message);
-        } else {
-          sendMessage(userID, `Invalid verse - [${chapterNum}:${verseNum}] does not exist`);
-        }
-  
-      });
+    const args = message.substring(1).split(':');
+    const suraNum = parseInt(args[0], 10);
+
+    if (args[1].includes('-')) { //range of verses
+      const range = args[1].split('-');
+      topRange = parseInt(range[0], 10);
+      bottomRange = parseInt(range[1], 10);
+
+      if (!isNaN(topRange) && !isNaN(bottomRange)) {
+        findVerses(suraNum, topRange, bottomRange, (rows) => {
+          logger.debug('Range inputs', suraNum, topRange, bottomRange);
+          if (rows) {
+            const response = cleanVerses(suraNum, topRange, bottomRange, rows);
+            sendMessage(channelID, response);
+          }
+        });
+      }
+
+    } else { //assume it is a single verse
+      const verseNum = parseInt(args[1], 10);
+      if (!isNaN(suraNum) && !isNaN(verseNum)) {
+        findVerse(suraNum, verseNum, (verseInfo) => {
+          logger.debug(suraNum, verseNum, verseInfo);
+          if (verseInfo) {
+            const response =  cleanVerse(suraNum, verseNum, verseInfo);
+            sendMessage(channelID, response);
+          }
+        });
+      }
     }
   } else if (message[0] === '!') {
     let args = message.substring(1).split(' ');
-    // console.log(args);
+    logger.debug(args);
     let cmd = args[0].toLowerCase();
 
     args = args.splice(1);
     switch (cmd) {
-      // !ping
       case 'ping':
         sendMessage(channelID, 'Pong!');
         break;
       case 'makan':
         sendMessage(channelID, 'Hi Makan, thanks for that swell SQL query! Much love');
         break;
+      case 'takbeer':
+        sendMessage(channelID, 'ALLAHU AKBAR!');
+        break;
     }
   }
+
 }
 
 const sendMessage = (recipient, message) => {
-  if (NODE_ENV == 'development') {
+  if (message.length > MAX_LENGTH) {
+    message = message.substring(0, MAX_LENGTH);
+    message += '\n[...]';
+  }
+
+  message = '```' + message + '```';
+
+  if (NODE_ENV === 'development') {
     console.log('Recipient: ' + recipient);
     console.log('Message: ' + message);
     return;
@@ -214,10 +278,6 @@ const sendMessage = (recipient, message) => {
   });
 };
 
-module.exports = {
-  genQuery,
-  cleanVerse,
-  parseCMD,
-  parseVerseQuery,
-  parseLookup
-};
+process.on('uncaughtException', function(err) {
+  logger.error('Caught exception: ' + err);
+});
