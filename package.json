@@ -10,10 +10,22 @@
   },
   "nyc": {
     "watermarks": {
-      "lines": [80, 95],
-      "functions": [80, 95],
-      "branches": [80, 95],
-      "statements": [80, 95]
+      "lines": [
+        80,
+        95
+      ],
+      "functions": [
+        80,
+        95
+      ],
+      "branches": [
+        80,
+        95
+      ],
+      "statements": [
+        80,
+        95
+      ]
     }
   },
   "author": "",
@@ -21,6 +33,7 @@
   "dependencies": {
     "bluebird": "^3.5.1",
     "discord.io": "https://github.com/woor/discord.io/tarball/gateway_v6",
+    "dotenv": "^6.0.0",
     "sqlite3": "^4.0.2",
     "winston": "^3.0.0",
     "winston-logzio": "^1.0.6"
