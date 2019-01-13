@@ -76,7 +76,9 @@ bot.on('ready', (evt) => {
 
 bot.on('message', (user, userID, channelID, message, evt) => {
   console.log(`[MESSAGE] Received messge from ${user} (${userID})`);
-  handleMessage(userID, channelID, message);
+  if (user !== 'Masjid Bot' || user !== 'TheFinalTestament') {
+    handleMessage(userID, channelID, message);
+  }
 });
 
 // Set up RandomVerse Instance
@@ -191,7 +193,16 @@ const cleanVerses = (query, rows) => {
 const parseMessage = (message) => {
   const verses = [];
   for (let i = 0; i < message.length; i += 1) {
-    if (message[i] === '$') {
+    if (message.includes('$random')) {
+      const query = random.generateRandomVerse();
+      try {
+        i += 6
+        query.isValid();
+        verses.push(query);
+      } catch (e) {
+        logger.error('[CAUGHT EXCEPTION] ', e);
+      }
+    } else if (message[i] === '$') {
       const query = new VerseQuery(message.slice(i));
       try {
         i += (query.index - 1);
@@ -206,22 +217,7 @@ const parseMessage = (message) => {
 }
 
 const handleMessage = (userID, channelID, message) => {
-  if (message === '$random') {
-    try {
-      const query = random.generateRandomVerse();
-      findVerses(query, (rows) => {
-        debugLog(query);
-        if (rows) {
-          const response = cleanVerses(query, rows);
-          sendMessage(channelID, response);
-        }
-      });
-    } catch (e) {
-      console.log(`[DATABASE] ${e}`);
-      logger.error("[DATABASE] ", e);
-      // failureResponse(userID, "HI! Quran Bot here. It looks like we didn't get anything. Please check the command you typed");
-    }
-  } else if (message[0] === '!') {
+  if (message[0] === '!') {
     let args = message.substring(1).split(' ');
     logger.debug(args);
     const cmd = args[0].toLowerCase();
