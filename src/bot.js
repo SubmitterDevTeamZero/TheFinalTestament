@@ -3,7 +3,7 @@ const winston = require('winston');
 const sqlite3 = require('sqlite3').verbose();
 const dotenv = require('dotenv');
 
-const VerseQuery = require('./verseQuery');
+const { VerseQuery, RandomVerse } = require('./verseQuery');
 
 const MAX_LENGTH = 1400;
 
@@ -40,8 +40,15 @@ if (NODE_ENV === 'development') {
 
 logger.level = process.env.LOG_LEVEL || 'silly';
 
+// Connect to SQLITE DB
 const db = new sqlite3.Database(`${__dirname}/../files/Quran.sqlite`, sqlite3.OPEN_READONLY, (err) => {
-  err ? logger.error(err.message) : logger.info('Connected to the Quran database.');
+  if (err) {
+    console.log(`[DB ERROR] Failed to connect to DB ${err.message}`);
+    logger.error(err.message)
+  } else {
+    console.log(`Connected to the Quran DB`);
+    logger.info('Connected to the Quran database.');
+  }
 });
 
 if (NODE_ENV === 'development') {
@@ -61,15 +68,20 @@ const bot = new Discord.Client({
   autorun: true
 });
 
-bot.on('ready', function (evt) {
+bot.on('ready', (evt) => {
+  console.log(`[CONNECTED] Logged in as: ${bot.username} - (${bot.id})`)
   logger.info('Connected');
   logger.info('Logged in as: ');
   logger.info(bot.username + ' - (' + bot.id + ')');
 });
 
-bot.on('message', function (user, userID, channelID, message, evt) {
+bot.on('message', (user, userID, channelID, message, evt) => {
+  console.log(`[MESSAGE] Received messge from ${user} (${userID})`);
   handleMessage(userID, channelID, message);
 });
+
+// Set up RandomVerse Instance
+const random = new RandomVerse();
 
 /* ------------------------------- */
 /* -- Methods to Handle Message -- */
@@ -90,27 +102,34 @@ const findVerses = (verseQuery, callback) => {
 
 const debugLog = (verseQuery) => {
   if (verseQuery.lastVerse) {
+    console.log(`[INPUTS] ${verseQuery.sura}, ${verseQuery.firstVerse}, ${verseQuery.lastVerse}`);
     logger.debug('[INPUTS]', verseQuery.sura, verseQuery.firstVerse, verseQuery.lastVerse);
   } else {
+    console.log(`[INPUTS] ${verseQuery.sura}, ${verseQuery.firstVerse}`);
     logger.debug('[INPUTS]', verseQuery.sura, verseQuery.firstVerse);
   }
 };
 
 // Generic response when a failure occurs.
-const failureResponse = (userId, message) => {
+const failureResponse = (userID, message) => {
   if (NODE_ENV === 'development') {
-    console.log('Recipient: ' + recipient);
+    console.log('Recipient: ' + userID);
     console.log('Message: ' + message);
     return;
   }
 
   bot.sendMessage({
-    to: recipient,
+    to: userID,
     message: message
   });
 }
 
 const sendMessage = (recipient, message) => {
+  if (message.length === 0) {
+    console.log('[RESPONSE] I GOT NOTHING...');
+    logger.info('[RESPONSE] I GOT NOTHING', message);
+    return null;
+  }
   if (message.length > MAX_LENGTH) {
     message = message.substring(0, MAX_LENGTH);
     message += '\n[...]';
@@ -133,8 +152,8 @@ const sendMessage = (recipient, message) => {
 // Get string containing range of verses
 const cleanVerses = (query, rows) => {
   const result = [];
-  rows.forEach(function (row, index) {
-    const currentVerse = firstVerseNum + index;
+  rows.forEach((row, index) => {
+    const currentVerse = query.firstVerse + index;
     const { ZSURA_EN, ZSUBTITLE, ZENGLISH_VERSION, ZFOOTNOTE } = row;
 
     if (ZSUBTITLE) result.push(ZSUBTITLE);
@@ -151,7 +170,7 @@ const cleanVerses = (query, rows) => {
         result.push(`Sura ${query.sura}: ${ZSURA_EN}`);
         result.push(ZENGLISH_VERSION);
       } else if (currentVerse === 1) {
-        if (firstVerseNum !== 0) { // this prevents redundant title text
+        if (query.firstVerse !== 0) { // this prevents redundant title text
           result.push(`Sura ${query.sura}: ${ZSURA_EN}`);
           if (query.sura === 9) // No basmalah!
             result.push('No Basmalah*');
@@ -177,7 +196,7 @@ const parseMessage = (message) => {
       try {
         query.isValid();
         verses.push(query);
-        i += query.index;
+        i += (query.index - 1);
       } catch (e) {
         logger.error('[CAUGHT EXCEPTION] ', e);
       }
@@ -188,7 +207,23 @@ const parseMessage = (message) => {
 }
 
 const handleMessage = (userID, channelID, message) => {
-  if (message[0] === '!') {
+  if (message === '$random') {
+    try {
+      const query = random.generateRandomVerse();
+      console.log(query.generateQuery());
+      findVerses(query, (rows) => {
+        debugLog(query);
+        if (rows) {
+          const response = cleanVerses(query, rows);
+          sendMessage(channelID, response);
+        }
+      });
+    } catch (e) {
+      console.log(`[DATABASE] ${e}`);
+      logger.error("[DATABASE] ", e);
+      // failureResponse(userID, "HI! Quran Bot here. It looks like we didn't get anything. Please check the command you typed");
+    }
+  } else if (message[0] === '!') {
     let args = message.substring(1).split(' ');
     logger.debug(args);
     const cmd = args[0].toLowerCase();
@@ -204,7 +239,7 @@ const handleMessage = (userID, channelID, message) => {
         sendMessage(channelID, 'ALLAHU AKBAR!');
         break;
     }
-  } else {
+  } else if (message[0] === '$') {
     const verses = parseMessage(message);
     //TODO: create ability to loop through multiple messages
     try {
@@ -217,13 +252,15 @@ const handleMessage = (userID, channelID, message) => {
         }
       });
     } catch (e) {
+      console.log(`[DATABASE] ${e}`);
       logger.error("[DATABASE] ", e);
-      failureResponse(userId, "HI! Quran Bot here. It looks like we didn't get anything. Please check the command you typed");
+      // failureResponse(userID, "HI! Quran Bot here. It looks like we didn't get anything. Please check the command you typed");
     }
   }
 
 }
 
-process.on('uncaughtException', function(err) {
+process.on('uncaughtException', (err) => {
+  console.log(`[EXCEPTION] Caught exception ${err}`)
   logger.error('Caught exception: ' + err);
 });
