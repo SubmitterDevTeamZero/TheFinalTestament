@@ -194,15 +194,14 @@ const parseMessage = (message) => {
     if (message[i] === '$') {
       const query = new VerseQuery(message.slice(i));
       try {
+        i += (query.index - 1);
         query.isValid();
         verses.push(query);
-        i += (query.index - 1);
       } catch (e) {
         logger.error('[CAUGHT EXCEPTION] ', e);
       }
     }
   }
-
   return verses;
 }
 
