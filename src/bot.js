@@ -76,7 +76,7 @@ bot.on('ready', (evt) => {
 
 bot.on('message', (user, userID, channelID, message, evt) => {
   console.log(`[MESSAGE] Received messge from ${user} (${userID})`);
-  if (user !== 'Masjid Bot' || user !== 'TheFinalTestament') {
+  if (user !== 'Masjid Bot' && user !== 'TheFinalTestament') {
     handleMessage(userID, channelID, message);
   }
 });
