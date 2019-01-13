@@ -4,7 +4,7 @@ const sqlite3 = require('sqlite3').verbose();
 const dotenv = require('dotenv');
 const { VerseQuery, RandomVerse } = require('./verseQuery');
 
-const MAX_LENGTH = 1400;
+const MAX_LENGTH = 1999;
 
 dotenv.config();
 
@@ -43,10 +43,10 @@ logger.level = process.env.LOG_LEVEL || 'silly';
 const db = new sqlite3.Database(`${__dirname}/../files/Quran.sqlite`, sqlite3.OPEN_READONLY, (err) => {
   if (err) {
     console.log(`[DB ERROR] Failed to connect to DB ${err.message}`);
-    logger.error(err.message)
+    logger.error(err.message);
   } else {
-    console.log(`Connected to the Quran DB`);
-    logger.info('Connected to the Quran database.');
+    console.log('[DB] Connected to the Quran DB');
+    logger.info('[DB] Connected to the Quran DB');
   }
 });
 
@@ -171,10 +171,11 @@ const cleanVerses = (query, rows) => {
       } else if (currentVerse === 1) {
         if (query.firstVerse !== 0) { // this prevents redundant title text
           result.push(`Sura ${query.sura}: ${ZSURA_EN}`);
-          if (query.sura === 9) // No basmalah!
+          if (query.sura === 9) {// No basmalah!
             result.push('No Basmalah*');
-          else
+          } else {
             result.push('In the name of GOD, Most Gracious, Most Merciful');
+          }
         }
         result.push(`[${query.sura}:${currentVerse}] ${ZENGLISH_VERSION}`);
       } else {
@@ -237,7 +238,7 @@ const handleMessage = (userID, channelID, message) => {
         sendMessage(channelID, 'ALLAHU AKBAR!');
         break;
     }
-  } else if (message[0] === '$') {
+  } else {
     const verses = parseMessage(message);
     //TODO: create ability to loop through multiple messages
     try {
