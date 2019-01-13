@@ -1,40 +1,43 @@
-const Discord = require('discord.io'),
-      winston = require('winston'),
-      sqlite3 = require('sqlite3').verbose(),
-      dotenv = require('dotenv');
+const Discord = require('discord.io');
+const winston = require('winston');
+const sqlite3 = require('sqlite3').verbose();
+const dotenv = require('dotenv');
+
+const VerseQuery = require('./helper');
 
 const MAX_LENGTH = 1400;
 
 dotenv.config();
-var NODE_ENV = process.env.NODE_ENV || 'development';
-var AUTH_TOKEN = process.env.AUTH_TOKEN || 'dev_token';
+
+const  NODE_ENV = process.env.NODE_ENV || 'development';
+const AUTH_TOKEN = process.env.AUTH_TOKEN || 'dev_token';
 
 // Configure logger settings
 const transportConsole = new (winston.transports.Console)({
   timestamp: true,
   colorize: true,
 });
+
 const transportFile = new winston.transports.File({filename: 'bot.log'});
-var logger;
+
+let logger;
+
 if (NODE_ENV === 'development') {
-    logger = winston.createLogger({
-        format: winston.format.json(),
-        transports: [transportConsole, transportFile]
-      });
+  logger = winston.createLogger({
+    format: winston.format.json(),
+    transports: [transportConsole, transportFile]
+  });
 } else {
-    logger = winston.createLogger({
-        format: winston.format.json(),
-        transports: [transportFile]
-      });
+  logger = winston.createLogger({
+    format: winston.format.json(),
+    transports: [transportFile]
+  });
 }
+
 logger.level = process.env.LOG_LEVEL || 'silly';
 
 const db = new sqlite3.Database(`${__dirname}/../files/Quran.sqlite`, sqlite3.OPEN_READONLY, (err) => {
-  if (err) {
-    logger.error(err.message);
-  } else {
-    logger.info('Connected to the Quran database.');
-  }
+  err ? logger.error(err.message) : logger.info('Connected to the Quran database.');
 });
 
 if (NODE_ENV === 'development') {
@@ -48,24 +51,6 @@ if (NODE_ENV === 'development') {
       handleMessage('MOCK_USER_ID', 'MOCK_CHANNEL_ID', d.toString().trim());
     });
 }
-
-const genQuery = (suraNumLookup, verseNumLookup) => {
-  if (!isNaN(suraNumLookup) && !isNaN(verseNumLookup)) {
-    return (
-      `SELECT s.ZSURA_EN, v.ZSUBTITLE, v.ZENGLISH_VERSION, v.ZFOOTNOTE FROM ZVERSE v INNER JOIN ZSURA s ON s.Z_PK = v.ZWHICHSURA WHERE v.ZVERSE_NO IS ${verseNumLookup} AND s.ZSURA_NO IS ${suraNumLookup};`
-    )
-  }
-  return new Error('INVALID SURA AND/OR VERSE: Need to provide a number');
-};
-
-const genRangeQuery = (suraNumLookup, firstVerseNum, lastVerseNum) => {
-  if (!isNaN(suraNumLookup) && !isNaN(firstVerseNum) && !isNaN(lastVerseNum)) {
-    return (
-      `SELECT s.ZSURA_EN, v.ZSUBTITLE, v.ZENGLISH_VERSION, v.ZFOOTNOTE FROM ZVERSE v INNER JOIN ZSURA s ON s.Z_PK = v.ZWHICHSURA WHERE v.ZVERSE_NO BETWEEN ${firstVerseNum} AND ${lastVerseNum} AND s.ZSURA_NO IS ${suraNumLookup} ORDER BY v.ZVERSE_NO;`
-    )
-  }
-  return new Error('INVALID SURA AND/OR VERSES: Need to provide a number');
-};
 
 const findVerse = (suraNumLookup, verseNumLookup, callback) => {
   const verseQuery = genQuery(suraNumLookup, verseNumLookup);
@@ -82,13 +67,7 @@ const findVerse = (suraNumLookup, verseNumLookup, callback) => {
 
 // Looks up a range of verses from firstVerseNum to lastVerseNum
 // in the given sura
-const findVerses = (suraNumLookup, firstVerseNum, lastVerseNum, callback) => {
-  const numVerses = lastVerseNum - firstVerseNum + 1;
-  if (isNaN(numVerses) || numVerses < 1)
-    throw new Error('findVerses: INVALID VERSE RANGE')
-
-  const verseQuery = genRangeQuery(suraNumLookup, firstVerseNum, lastVerseNum);
-
+const findVerses = (verseQuery, callback) => {
   return db.all(verseQuery, [], (err, rows) => {
     if (err) {
       throw err;
@@ -205,44 +184,30 @@ bot.on('message', function (user, userID, channelID, message, evt) {
   handleMessage(userID, channelID, message);
 });
 
-const handleMessage = (userID, channelID, message) => {
-  if (message[0] === '$') {
-    const args = message.substring(1).split(':');
-    const suraNum = parseInt(args[0], 10);
-
-    if (args[1].includes('-')) { //range of verses
-      const range = args[1].split('-');
-      topRange = parseInt(range[0], 10);
-      bottomRange = parseInt(range[1], 10);
-
-      if (!isNaN(topRange) && !isNaN(bottomRange)) {
-        findVerses(suraNum, topRange, bottomRange, (rows) => {
-          logger.debug('Range inputs', suraNum, topRange, bottomRange);
-          if (rows) {
-            const response = cleanVerses(suraNum, topRange, bottomRange, rows);
-            sendMessage(channelID, response);
-          }
-        });
-      }
-
-    } else { //assume it is a single verse
-      const verseNum = parseInt(args[1], 10);
-      if (!isNaN(suraNum) && !isNaN(verseNum)) {
-        findVerse(suraNum, verseNum, (verseInfo) => {
-          logger.debug(suraNum, verseNum, verseInfo);
-          if (verseInfo) {
-            const response =  cleanVerse(suraNum, verseNum, verseInfo);
-            sendMessage(channelID, response);
-          }
-        });
+const parseMessage = (message) => {
+  const verses = [];
+  for (let i = 0; i < message.length; i += 1) {
+    if (message[i] === '$') {
+      const query = new VerseQuery(message.slice(i));
+      try {
+        query.isValid();
+        verses.push(query)
+        i += query.index;
+      } catch (e) {
+        logger.error('[CAUGHT EXCEPTION] ', e);
       }
     }
-  } else if (message[0] === '!') {
-    let args = message.substring(1).split(' ');
-    logger.debug(args);
-    let cmd = args[0].toLowerCase();
+  }
 
-    args = args.splice(1);
+  return verses;
+}
+
+const handleMessage = (userID, channelID, message) => {
+  if (message[0] === '!') {
+    const args = message.substring(1).split(' ');
+    logger.debug(args);
+    const cmd = args[0].toLowerCase();
+
     switch (cmd) {
       case 'ping':
         sendMessage(channelID, 'Pong!');
@@ -253,6 +218,14 @@ const handleMessage = (userID, channelID, message) => {
       case 'takbeer':
         sendMessage(channelID, 'ALLAHU AKBAR!');
         break;
+    }
+  } else {
+    const verses = parseMessage(message);
+    // refactor to parse multiple verses
+    try {
+      findVerse(verses[0]);
+    } catch (e) {
+      logger.error("[DATABASE] ", e)
     }
   }
 
