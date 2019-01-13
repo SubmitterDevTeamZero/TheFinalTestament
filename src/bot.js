@@ -2,7 +2,6 @@ const Discord = require('discord.io');
 const winston = require('winston');
 const sqlite3 = require('sqlite3').verbose();
 const dotenv = require('dotenv');
-
 const { VerseQuery, RandomVerse } = require('./verseQuery');
 
 const MAX_LENGTH = 1400;
@@ -210,7 +209,6 @@ const handleMessage = (userID, channelID, message) => {
   if (message === '$random') {
     try {
       const query = random.generateRandomVerse();
-      console.log(query.generateQuery());
       findVerses(query, (rows) => {
         debugLog(query);
         if (rows) {
