@@ -110,8 +110,28 @@ const failureResponse = (userId, message) => {
   });
 }
 
+const sendMessage = (recipient, message) => {
+  if (message.length > MAX_LENGTH) {
+    message = message.substring(0, MAX_LENGTH);
+    message += '\n[...]';
+  }
+
+  message = '```' + message + '```';
+
+  if (NODE_ENV === 'development') {
+    console.log('Recipient: ' + recipient);
+    console.log('Message: ' + message);
+    return;
+  }
+
+  bot.sendMessage({
+    to: recipient,
+    message: message
+  });
+};
+
 // Get string containing range of verses
-const cleanVerses = (verseQuery, rows) => {
+const cleanVerses = (query, rows) => {
   const result = [];
   rows.forEach(function (row, index) {
     const currentVerse = firstVerseNum + index;
@@ -119,28 +139,28 @@ const cleanVerses = (verseQuery, rows) => {
 
     if (ZSUBTITLE) result.push(ZSUBTITLE);
 
-    if (suraNum === 1) {
+    if (query.sura === 1) {
       if (currentVerse === 0) {
         throw new Error('cleanVerses: INVALID VERSE RANGE')
       } else if (currentVerse === 1) {
-        result.push(`Sura ${suraNum}: ${ZSURA_EN}`);
+        result.push(`Sura ${query.sura}: ${ZSURA_EN}`);
       }
-      result.push(`[${suraNum}:${currentVerse}] ${ZENGLISH_VERSION}`);
+      result.push(`[${query.sura}:${currentVerse}] ${ZENGLISH_VERSION}`);
     } else { // Sura 2-114
       if (currentVerse === 0) {
-        result.push(`Sura ${suraNum}: ${ZSURA_EN}`);
+        result.push(`Sura ${query.sura}: ${ZSURA_EN}`);
         result.push(ZENGLISH_VERSION);
       } else if (currentVerse === 1) {
         if (firstVerseNum !== 0) { // this prevents redundant title text
-          result.push(`Sura ${suraNum}: ${ZSURA_EN}`);
-          if (suraNum === 9) // No basmalah!
+          result.push(`Sura ${query.sura}: ${ZSURA_EN}`);
+          if (query.sura === 9) // No basmalah!
             result.push('No Basmalah*');
           else
             result.push('In the name of GOD, Most Gracious, Most Merciful');
         }
-        result.push(`[${suraNum}:${currentVerse}] ${ZENGLISH_VERSION}`);
+        result.push(`[${query.sura}:${currentVerse}] ${ZENGLISH_VERSION}`);
       } else {
-        result.push(`[${suraNum}:${currentVerse}] ${ZENGLISH_VERSION}`);
+        result.push(`[${query.sura}:${currentVerse}] ${ZENGLISH_VERSION}`);
       }
     }
     if (ZFOOTNOTE) result.push(ZFOOTNOTE);
@@ -168,38 +188,7 @@ const parseMessage = (message) => {
 }
 
 const handleMessage = (userID, channelID, message) => {
-  if (message[0] === '$') {
-    const args = message.substring(1).split(':');
-    const suraNum = parseInt(args[0], 10);
-
-    if (args[1].includes('-')) { //range of verses
-      const range = args[1].split('-');
-      topRange = parseInt(range[0], 10);
-      bottomRange = parseInt(range[1], 10);
-
-      if (!isNaN(topRange) && !isNaN(bottomRange)) {
-        findVerses(suraNum, topRange, bottomRange, (rows) => {
-          logger.debug('Range inputs', suraNum, topRange, bottomRange);
-          if (rows) {
-            const response = cleanVerses(suraNum, topRange, bottomRange, rows);
-            sendMessage(channelID, response);
-          }
-        });
-      }
-
-    } else { //assume it is a single verse
-      const verseNum = parseInt(args[1], 10);
-      if (!isNaN(suraNum) && !isNaN(verseNum)) {
-        findVerse(suraNum, verseNum, (verseInfo) => {
-          logger.debug(suraNum, verseNum, verseInfo);
-          if (verseInfo) {
-            const response =  cleanVerse(suraNum, verseNum, verseInfo);
-            sendMessage(channelID, response);
-          }
-        });
-      }
-    }
-  } else if (message[0] === '!') {
+  if (message[0] === '!') {
     let args = message.substring(1).split(' ');
     logger.debug(args);
     const cmd = args[0].toLowerCase();
@@ -223,7 +212,7 @@ const handleMessage = (userID, channelID, message) => {
       findVerses(query, (rows) => {
         debugLog(query);
         if (rows) {
-          const response = cleanVerses(suraNum, topRange, bottomRange, rows);
+          const response = cleanVerses(query, rows);
           sendMessage(channelID, response);
         }
       });
@@ -234,26 +223,6 @@ const handleMessage = (userID, channelID, message) => {
   }
 
 }
-
-const sendMessage = (recipient, message) => {
-  if (message.length > MAX_LENGTH) {
-    message = message.substring(0, MAX_LENGTH);
-    message += '\n[...]';
-  }
-
-  message = '```' + message + '```';
-
-  if (NODE_ENV === 'development') {
-    console.log('Recipient: ' + recipient);
-    console.log('Message: ' + message);
-    return;
-  }
-
-  bot.sendMessage({
-    to: recipient,
-    message: message
-  });
-};
 
 process.on('uncaughtException', function(err) {
   logger.error('Caught exception: ' + err);
