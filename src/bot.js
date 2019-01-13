@@ -110,38 +110,14 @@ const failureResponse = (userId, message) => {
   });
 }
 
-const cleanVerse = (verseQuery, verseInfo) => {
-  const { ZSURA_EN, ZSUBTITLE, ZENGLISH_VERSION, ZFOOTNOTE } = verseInfo;
-  if (!areInputsValid(suraNum, verseNum, verseNum))
-    throw new Error('cleanVerses: INVALID VERSE RANGE')
-
-  const result = [];
-  if (verseNum === 0) {
-    result.push(`Sura ${suraNum}: ${ZSURA_EN}`);
-    result.push(ZENGLISH_VERSION);
-  } else if (verseNum === 1) {
-    result.push(`Sura ${suraNum}: ${ZSURA_EN}`);
-    if (suraNum !== 1 && suraNum !== 9) {
-      result.push('In the name of GOD, Most Gracious, Most Merciful');
-    }
-    result.push(`[${suraNum}:${verseNum}] ${ZENGLISH_VERSION}`);
-    if (ZFOOTNOTE) result.push(ZFOOTNOTE);
-  } else {
-    if (ZSUBTITLE) result.push(ZSUBTITLE);
-    result.push(`[${suraNum}:${verseNum}] ${ZENGLISH_VERSION}`);
-    if (ZFOOTNOTE) result.push(ZFOOTNOTE);
-  }
-
-  return result.join('\n');
-}
-
 // Get string containing range of verses
 const cleanVerses = (verseQuery, rows) => {
   const result = [];
-  var num = 0;
-  rows.forEach(function (row) {
-    const currentVerse = firstVerseNum + num;
+  rows.forEach(function (row, index) {
+    const currentVerse = firstVerseNum + index;
     const { ZSURA_EN, ZSUBTITLE, ZENGLISH_VERSION, ZFOOTNOTE } = row;
+
+    if (ZSUBTITLE) result.push(ZSUBTITLE);
 
     if (suraNum === 1) {
       if (currentVerse === 0) {
@@ -149,14 +125,11 @@ const cleanVerses = (verseQuery, rows) => {
       } else if (currentVerse === 1) {
         result.push(`Sura ${suraNum}: ${ZSURA_EN}`);
       }
-      if (ZSUBTITLE) result.push(ZSUBTITLE);
       result.push(`[${suraNum}:${currentVerse}] ${ZENGLISH_VERSION}`);
-      if (ZFOOTNOTE) result.push(ZFOOTNOTE);
     } else { // Sura 2-114
       if (currentVerse === 0) {
         result.push(`Sura ${suraNum}: ${ZSURA_EN}`);
         result.push(ZENGLISH_VERSION);
-        if (ZFOOTNOTE) result.push(ZFOOTNOTE);
       } else if (currentVerse === 1) {
         if (firstVerseNum !== 0) { // this prevents redundant title text
           result.push(`Sura ${suraNum}: ${ZSURA_EN}`);
@@ -166,15 +139,11 @@ const cleanVerses = (verseQuery, rows) => {
             result.push('In the name of GOD, Most Gracious, Most Merciful');
         }
         result.push(`[${suraNum}:${currentVerse}] ${ZENGLISH_VERSION}`);
-        if (ZFOOTNOTE) result.push(ZFOOTNOTE);
       } else {
-        if (ZSUBTITLE) result.push(ZSUBTITLE);
         result.push(`[${suraNum}:${currentVerse}] ${ZENGLISH_VERSION}`);
-        if (ZFOOTNOTE) result.push(ZFOOTNOTE);
       }
     }
-
-    num++;
+    if (ZFOOTNOTE) result.push(ZFOOTNOTE);
   });
 
   return result.join('\n');
