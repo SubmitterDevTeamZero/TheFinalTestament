@@ -3,21 +3,29 @@ const winston = require('winston');
 const sqlite3 = require('sqlite3').verbose();
 const dotenv = require('dotenv');
 
-const VerseQuery = require('./helper');
+const VerseQuery = require('./verseQuery');
 
 const MAX_LENGTH = 1400;
 
 dotenv.config();
-var NODE_ENV = process.env.NODE_ENV || 'development';
-var AUTH_TOKEN = process.env.AUTH_TOKEN || 'dev_token';
+
+/* ------------------------------- */
+/* --------- BOT SET UP ---------- */
+/* ------------------------------- */
+
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const AUTH_TOKEN = process.env.AUTH_TOKEN || 'dev_token';
 
 // Configure logger settings
 const transportConsole = new (winston.transports.Console)({
   timestamp: true,
   colorize: true,
 });
+
 const transportFile = new winston.transports.File({filename: 'bot.log'});
-var logger;
+
+let logger;
+
 if (NODE_ENV === 'development') {
     logger = winston.createLogger({
         format: winston.format.json(),
@@ -29,21 +37,17 @@ if (NODE_ENV === 'development') {
         transports: [transportFile]
       });
 }
+
 logger.level = process.env.LOG_LEVEL || 'silly';
 
 const db = new sqlite3.Database(`${__dirname}/../files/Quran.sqlite`, sqlite3.OPEN_READONLY, (err) => {
-  if (err) {
-    logger.error(err.message);
-  } else {
-    logger.info('Connected to the Quran database.');
-  }
+  err ? logger.error(err.message) : logger.info('Connected to the Quran database.');
 });
 
 if (NODE_ENV === 'development') {
   var stdin = process.openStdin();
-  stdin.addListener("data", function(d) {
-      if (d.toString().trim() === 'quit')
-        process.exit(-1);
+  stdin.addListener("data", (d) => {
+      if (d.toString().trim() === 'quit') process.exit(-1);
       // note:  d is an object, and when converted to a string it will
       // end with a linefeed.  so we (rather crudely) account for that  
       // with toString() and then trim() 
@@ -51,41 +55,30 @@ if (NODE_ENV === 'development') {
     });
 }
 
-const genQuery = (suraNumLookup, verseNumLookup) => {
-  if (!isNaN(suraNumLookup) && !isNaN(verseNumLookup)) {
-    return (
-      `SELECT s.ZSURA_EN, v.ZSUBTITLE, v.ZENGLISH_VERSION, v.ZFOOTNOTE FROM ZVERSE v INNER JOIN ZSURA s ON s.Z_PK = v.ZWHICHSURA WHERE v.ZVERSE_NO IS ${verseNumLookup} AND s.ZSURA_NO IS ${suraNumLookup};`
-    )
-  }
-  return new Error('INVALID SURA AND/OR VERSE: Need to provide a number');
-};
+// Initialize Discord Bot
+const bot = new Discord.Client({
+  token: AUTH_TOKEN,
+  autorun: true
+});
 
-const genRangeQuery = (suraNumLookup, firstVerseNum, lastVerseNum) => {
-  if (!isNaN(suraNumLookup) && !isNaN(firstVerseNum) && !isNaN(lastVerseNum)) {
-    return (
-      `SELECT s.ZSURA_EN, v.ZSUBTITLE, v.ZENGLISH_VERSION, v.ZFOOTNOTE FROM ZVERSE v INNER JOIN ZSURA s ON s.Z_PK = v.ZWHICHSURA WHERE v.ZVERSE_NO BETWEEN ${firstVerseNum} AND ${lastVerseNum} AND s.ZSURA_NO IS ${suraNumLookup} ORDER BY v.ZVERSE_NO;`
-    )
-  }
-  return new Error('INVALID SURA AND/OR VERSES: Need to provide a number');
-};
+bot.on('ready', function (evt) {
+  logger.info('Connected');
+  logger.info('Logged in as: ');
+  logger.info(bot.username + ' - (' + bot.id + ')');
+});
 
-const findVerse = (suraNumLookup, verseNumLookup, callback) => {
-  const verseQuery = genQuery(suraNumLookup, verseNumLookup);
+bot.on('message', function (user, userID, channelID, message, evt) {
+  handleMessage(userID, channelID, message);
+});
 
-  return db.get(verseQuery, [], (err, rows) => {
-    if (err) {
-      throw err;
-    } else {
-      logger.debug('these are the verses', rows);
-      callback(rows);
-    }
-  });
-};
+/* ------------------------------- */
+/* -- Methods to Handle Message -- */
+/* ------------------------------- */
 
-// Looks up a range of verses from firstVerseNum to lastVerseNum
-// in the given sura
+// Looks up for all the verses that are tied to the query
 const findVerses = (verseQuery, callback) => {
-  return db.all(verseQuery, [], (err, rows) => {
+  // Use GET for the first row, and ALL for all the rows
+  return db.all(verseQuery.generateQuery(), [], (err, rows) => {
     if (err) {
       throw err;
     } else {
@@ -95,7 +88,29 @@ const findVerses = (verseQuery, callback) => {
   });
 };
 
-const cleanVerse = (suraNum, verseNum, verseInfo) => {
+const debugLog = (verseQuery) => {
+  if (verseQuery.lastVerse) {
+    logger.debug('[INPUTS]', verseQuery.sura, verseQuery.firstVerse, verseQuery.lastVerse);
+  } else {
+    logger.debug('[INPUTS]', verseQuery.sura, verseQuery.firstVerse);
+  }
+};
+
+// Generic response when a failure occurs.
+const failureResponse = (userId, message) => {
+  if (NODE_ENV === 'development') {
+    console.log('Recipient: ' + recipient);
+    console.log('Message: ' + message);
+    return;
+  }
+
+  bot.sendMessage({
+    to: recipient,
+    message: message
+  });
+}
+
+const cleanVerse = (verseQuery, verseInfo) => {
   const { ZSURA_EN, ZSUBTITLE, ZENGLISH_VERSION, ZFOOTNOTE } = verseInfo;
   if (!areInputsValid(suraNum, verseNum, verseNum))
     throw new Error('cleanVerses: INVALID VERSE RANGE')
@@ -121,11 +136,7 @@ const cleanVerse = (suraNum, verseNum, verseInfo) => {
 }
 
 // Get string containing range of verses
-const cleanVerses = (suraNum, firstVerseNum, lastVerseNum, rows) => {
-  const numVerses = lastVerseNum - firstVerseNum + 1;
-  if (!areInputsValid(suraNum, firstVerseNum, lastVerseNum) || isNaN(numVerses) || numVerses < 1)
-    throw new Error('cleanVerses: INVALID VERSE RANGE')
-
+const cleanVerses = (verseQuery, rows) => {
   const result = [];
   var num = 0;
   rows.forEach(function (row) {
@@ -169,37 +180,23 @@ const cleanVerses = (suraNum, firstVerseNum, lastVerseNum, rows) => {
   return result.join('\n');
 }
 
-const areInputsValid = (suraNum, firstVerseNum, lastVerseNum) => {
-  if ( (isNaN(suraNum) || isNaN(firstVerseNum) || isNaN(lastVerseNum))
-      || (firstVerseNum > lastVerseNum)
-      || (suraNum < 0)
-      || (firstVerseNum < 0)
-      || (lastVerseNum < 0)
-      || (suraNum > 114)
-      || (firstVerseNum > 286)
-      || (lastVerseNum > 286)
-      || (suraNum == 1 && firstVerseNum == 0)
-      || (suraNum == 9 && firstVerseNum == 0) )
-    return false;
+const parseMessage = (message) => {
+  const verses = [];
+  for (let i = 0; i < message.length; i += 1) {
+    if (message[i] === '$') {
+      const query = new VerseQuery(message.slice(i));
+      try {
+        query.isValid();
+        verses.push(query);
+        i += query.index;
+      } catch (e) {
+        logger.error('[CAUGHT EXCEPTION] ', e);
+      }
+    }
+  }
 
-  return true;
+  return verses;
 }
-
-// Initialize Discord Bot
-const bot = new Discord.Client({
-  token: AUTH_TOKEN,
-  autorun: true
-});
-
-bot.on('ready', function (evt) {
-  logger.info('Connected');
-  logger.info('Logged in as: ');
-  logger.info(bot.username + ' - (' + bot.id + ')');
-});
-
-bot.on('message', function (user, userID, channelID, message, evt) {
-  handleMessage(userID, channelID, message);
-});
 
 const handleMessage = (userID, channelID, message) => {
   if (message[0] === '$') {
@@ -236,9 +233,8 @@ const handleMessage = (userID, channelID, message) => {
   } else if (message[0] === '!') {
     let args = message.substring(1).split(' ');
     logger.debug(args);
-    let cmd = args[0].toLowerCase();
+    const cmd = args[0].toLowerCase();
 
-    args = args.splice(1);
     switch (cmd) {
       case 'ping':
         sendMessage(channelID, 'Pong!');
@@ -251,9 +247,21 @@ const handleMessage = (userID, channelID, message) => {
         break;
     }
   } else {
-    const verseQueries = new VerseQuery(message);
+    const verses = parseMessage(message);
     //TODO: create ability to loop through multiple messages
-
+    try {
+      const query = verses[0];
+      findVerses(query, (rows) => {
+        debugLog(query);
+        if (rows) {
+          const response = cleanVerses(suraNum, topRange, bottomRange, rows);
+          sendMessage(channelID, response);
+        }
+      });
+    } catch (e) {
+      logger.error("[DATABASE] ", e);
+      failureResponse(userId, "HI! Quran Bot here. It looks like we didn't get anything. Please check the command you typed");
+    }
   }
 
 }
