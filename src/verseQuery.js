@@ -1,4 +1,5 @@
 const { ParseCompletionException, InvalidInputException } = require('./customError');
+const suraVerseCounts = require('./suraVerseCounts');
 
 class VerseQuery {
   constructor(message) {
@@ -14,6 +15,9 @@ class VerseQuery {
     let position = 0;
     while (this.index < message.length) {
       const char = message[this.index];
+
+      if (!char.match(/[0-9\-\:]/g)) break;
+
       if (char === ':' || char === '-') {
         position += 1;
       } else if (position === 0) {
@@ -34,12 +38,12 @@ class VerseQuery {
     if (!this.completed) {
       throw new ParseCompletionException('Ran Validity Check before query was parsed', this);
     }
-    this.sura = parseInt(this.sura.join());
-    this.firstVerse = parseInt(this.firstVerse.join());
+    this.sura = parseInt(this.sura.join(''));
+    this.firstVerse = parseInt(this.firstVerse.join(''));
     if (this.lastVerse.length === 0) {
       this.lastVerse = null;
     } else {
-      this.lastVerse = parseInt(this.lastVerse.join());
+      this.lastVerse = parseInt(this.lastVerse.join(''));
     }
     this.transformResults = null;
     this.parseMessage = null;
@@ -71,4 +75,23 @@ class VerseQuery {
   }
 }
 
-module.exports = VerseQuery;
+class RandomVerse {
+  generateRandomVerse() {
+    const sura = this.getSura();
+    const verse = this.getVerse(sura);
+    return new VerseQuery(`$${sura}:${verse}`);
+  }
+
+  getSura() {
+    return Math.floor(Math.random() * 114) + 1;
+  }
+
+  getVerse(sura) {
+    return Math.floor(Math.random() * suraVerseCounts[sura]) + 1;
+  }
+}
+
+module.exports = {
+  VerseQuery,
+  RandomVerse
+};
