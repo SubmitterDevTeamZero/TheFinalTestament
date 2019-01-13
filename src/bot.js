@@ -217,22 +217,7 @@ const parseMessage = (message) => {
 }
 
 const handleMessage = (userID, channelID, message) => {
-  if (message === '$random') {
-    try {
-      const query = random.generateRandomVerse();
-      findVerses(query, (rows) => {
-        debugLog(query);
-        if (rows) {
-          const response = cleanVerses(query, rows);
-          sendMessage(channelID, response);
-        }
-      });
-    } catch (e) {
-      console.log(`[DATABASE] ${e}`);
-      logger.error("[DATABASE] ", e);
-      // failureResponse(userID, "HI! Quran Bot here. It looks like we didn't get anything. Please check the command you typed");
-    }
-  } else if (message[0] === '!') {
+  if (message[0] === '!') {
     let args = message.substring(1).split(' ');
     logger.debug(args);
     const cmd = args[0].toLowerCase();
