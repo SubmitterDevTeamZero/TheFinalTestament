@@ -239,7 +239,7 @@ const handleMessage = (userID, channelID, message) => {
     }
   } else {
     const verses = parseMessage(message);
-    //TODO: create ability to loop through multiple messages
+    //TODO: create return multiple querie in the same message
     try {
       const query = verses[0];
       findVerses(query, (rows) => {
