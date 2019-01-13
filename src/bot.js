@@ -4,7 +4,7 @@ const sqlite3 = require('sqlite3').verbose();
 const dotenv = require('dotenv');
 const { VerseQuery, RandomVerse } = require('./verseQuery');
 
-const MAX_LENGTH = 1999;
+const MAX_LENGTH = 1990;
 
 dotenv.config();
 
