@@ -238,13 +238,15 @@ const handleMessage = (userID, channelID, message) => {
     //TODO: create return multiple querie in the same message
     try {
       const query = verses[0];
-      findVerses(query, (rows) => {
-        debugLog(query);
-        if (rows) {
-          const response = cleanVerses(query, rows);
-          sendMessage(channelID, response);
-        }
-      });
+      if (query) {
+        findVerses(query, (rows) => {
+          debugLog(query);
+          if (rows) {
+            const response = cleanVerses(query, rows);
+            sendMessage(channelID, response);
+          }
+        });
+      }
     } catch (e) {
       console.log(`[DATABASE] ${e}`);
       logger.error("[DATABASE] ", e);
