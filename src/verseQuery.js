@@ -1,4 +1,5 @@
 const { ParseCompletionException, InvalidInputException } = require('./customError');
+const logger = require('./logger');
 const suraVerseCounts = require('./suraVerseCounts');
 
 class VerseQuery {
@@ -13,6 +14,7 @@ class VerseQuery {
 
   parseMessage(message) {
     let position = 0;
+    logger.log('info', message);
     while (this.index < message.length) {
       const char = message[this.index];
 
