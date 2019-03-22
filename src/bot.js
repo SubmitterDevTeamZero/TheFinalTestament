@@ -2,6 +2,7 @@ const Discord = require('discord.io');
 const winston = require('winston');
 const sqlite3 = require('sqlite3').verbose();
 const dotenv = require('dotenv');
+const logger = require('./logger');
 const { VerseQuery, RandomVerse } = require('./verseQuery');
 
 const MAX_LENGTH = 1980;
@@ -11,33 +12,6 @@ dotenv.config();
 /* ------------------------------- */
 /* --------- BOT SET UP ---------- */
 /* ------------------------------- */
-
-const NODE_ENV = process.env.NODE_ENV || 'development';
-const AUTH_TOKEN = process.env.AUTH_TOKEN || 'dev_token';
-
-// Configure logger settings
-const transportConsole = new (winston.transports.Console)({
-  timestamp: true,
-  colorize: true,
-});
-
-const transportFile = new winston.transports.File({filename: 'bot.log'});
-
-let logger;
-
-if (NODE_ENV === 'development') {
-    logger = winston.createLogger({
-        format: winston.format.json(),
-        transports: [transportConsole, transportFile]
-      });
-} else {
-    logger = winston.createLogger({
-        format: winston.format.json(),
-        transports: [transportFile]
-      });
-}
-
-logger.level = process.env.LOG_LEVEL || 'silly';
 
 // Connect to SQLITE DB
 const db = new sqlite3.Database(`${__dirname}/../files/Quran.sqlite`, sqlite3.OPEN_READONLY, (err) => {
